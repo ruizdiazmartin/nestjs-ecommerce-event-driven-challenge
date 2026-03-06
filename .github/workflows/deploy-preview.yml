@@ -157,7 +157,7 @@ jobs:
             }
 
   cleanup-preview-db:
-    if: github.event.action == 'closed' && secrets.NEON_API_KEY != '' && secrets.NEON_PROJECT_ID != '' && secrets.NEON_PARENT_BRANCH_ID != ''
+    if: github.event.action == 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -168,7 +168,21 @@ jobs:
         with:
           node-version: 20
 
+      - name: Check Neon cleanup preconditions
+        id: cleanup_preconditions
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH_ID: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+        run: |
+          if [ -n "$NEON_API_KEY" ] && [ -n "$NEON_PROJECT_ID" ] && [ -n "$NEON_PARENT_BRANCH_ID" ]; then
+            echo "should_cleanup=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_cleanup=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Delete Neon branch for PR
+        if: steps.cleanup_preconditions.outputs.should_cleanup == 'true'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -176,3 +190,7 @@ jobs:
           NEON_DATABASE_NAME: ${{ secrets.NEON_DATABASE_NAME }}
           NEON_ROLE_NAME: ${{ secrets.NEON_ROLE_NAME }}
         run: node scripts/ci/neon-branch.mjs delete preview-pr-${{ github.event.pull_request.number }}
+
+      - name: Skip cleanup when Neon branch mode is not configured
+        if: steps.cleanup_preconditions.outputs.should_cleanup != 'true'
+        run: echo "Skipping Neon branch cleanup because NEON_API_KEY/NEON_PROJECT_ID/NEON_PARENT_BRANCH_ID are not configured."
