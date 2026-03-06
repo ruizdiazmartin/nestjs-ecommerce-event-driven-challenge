@@ -87,7 +87,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
           PREVIEW_DATABASE_URL: ${{ steps.preview_db_url.outputs.database_url }}
         run: |
-          DEPLOY_OUTPUT=$(vercel deploy --yes --token "$VERCEL_TOKEN" \
+          DEPLOY_OUTPUT=$(vercel deploy --yes --public --token "$VERCEL_TOKEN" \
             --env DATABASE_URL="$PREVIEW_DATABASE_URL" \
             --env DATABASE_SSL=require)
           API_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
@@ -107,7 +107,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
           API_PREVIEW_URL: ${{ steps.deploy_api.outputs.api_url }}
         run: |
-          DEPLOY_OUTPUT=$(vercel deploy --yes --token "$VERCEL_TOKEN" --build-env VITE_API_BASE_URL="$API_PREVIEW_URL")
+          DEPLOY_OUTPUT=$(vercel deploy --yes --public --token "$VERCEL_TOKEN" --build-env VITE_API_BASE_URL="$API_PREVIEW_URL")
           WEB_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
           if [ -z "$WEB_URL" ]; then
             echo "Failed to parse Web preview URL"

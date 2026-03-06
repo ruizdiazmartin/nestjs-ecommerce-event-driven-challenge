@@ -59,7 +59,11 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   const rawBody = await response.text();
-  const parsedBody = rawBody ? (JSON.parse(rawBody) as unknown) : null;
+  const contentType = response.headers.get('content-type') ?? '';
+  let parsedBody: unknown = null;
+  if (rawBody && contentType.includes('application/json')) {
+    parsedBody = JSON.parse(rawBody) as unknown;
+  }
 
   if (parsedBody && typeof parsedBody === 'object' && 'isSuccess' in parsedBody) {
     const payload = parsedBody as ApiEnvelope<T>;
@@ -78,6 +82,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (!response.ok) {
+    if (
+      contentType.includes('text/html') &&
+      /Authentication Required|Vercel Authentication/i.test(rawBody)
+    ) {
+      const err = new ApiClientError(
+        'Preview API protegida por Vercel. Desactiva Deployment Protection para Preview o usa deploy con --public.',
+      );
+      err.status = response.status;
+      throw err;
+    }
     const err = new ApiClientError(`Request failed (${response.status})`);
     err.status = response.status;
     throw err;
