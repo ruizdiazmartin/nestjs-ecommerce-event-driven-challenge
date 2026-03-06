@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Entrega Challenge - One Pager</title>
+    <style>
+      @page {
+        size: A4 landscape;
+        margin: 10mm;
+      }
+
+      :root {
+        --ink: #0f2238;
+        --muted: #4e637c;
+        --line: #d5dfeb;
+        --surface: #ffffff;
+        --soft: #f5f8fc;
+        --accent: #0c6959;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", "Inter", Arial, sans-serif;
+        color: var(--ink);
+        background: #fff;
+      }
+
+      .page {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 14px;
+        background: var(--surface);
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        gap: 10px;
+      }
+
+      .header {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: var(--soft);
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 27px;
+        line-height: 1.08;
+        letter-spacing: -0.02em;
+      }
+
+      .objective {
+        margin: 6px 0 0;
+        font-size: 12.5px;
+        line-height: 1.35;
+        color: var(--muted);
+      }
+
+      .summary {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .summary b {
+        color: #10375f;
+      }
+
+      .content {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: #fff;
+      }
+
+      .stack {
+        display: grid;
+        gap: 8px;
+      }
+
+      h2 {
+        margin: 0 0 6px;
+        font-size: 13.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: #1d4168;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 17px;
+      }
+
+      li {
+        margin: 2px 0;
+        font-size: 11.6px;
+        line-height: 1.27;
+      }
+
+      code {
+        background: #edf3fa;
+        border: 1px solid #d8e3ef;
+        border-radius: 5px;
+        padding: 0 5px;
+        font-size: 0.9em;
+      }
+
+      .flow {
+        margin-top: 2px;
+        border: 1px dashed #c7d7ea;
+        border-radius: 8px;
+        background: #f8fbff;
+        padding: 8px;
+        white-space: pre-line;
+        font-family: "IBM Plex Mono", Menlo, monospace;
+        font-size: 10px;
+        line-height: 1.35;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10.8px;
+      }
+
+      th,
+      td {
+        border: 1px solid #d9e4f0;
+        padding: 4px 5px;
+        text-align: left;
+      }
+
+      th {
+        background: #f1f6fc;
+        font-weight: 700;
+      }
+
+      .footer {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: var(--soft);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        font-size: 11.5px;
+      }
+
+      .footer b {
+        color: var(--accent);
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <h1>Entrega Challenge Sr Fullstack (Microservicios)</h1>
+        <p class="objective">
+          Objetivo: evolucionar el backend NestJS + PostgreSQL a un enfoque event-driven,
+          resolver problemas estructurales mínimos y demostrar el flujo completo en una web React.
+        </p>
+      </header>
+
+      <section class="summary">
+        <b>Resultado:</b> backend y frontend funcionando end-to-end con permisos por rol,
+        lifecycle de producto (crear, editar, activar, desactivar), eventos de dominio persistidos
+        en <code>product_event</code> y timeline visible en UI.
+      </section>
+
+      <section class="content">
+        <div class="stack">
+          <article class="card">
+            <h2>Qué resolví</h2>
+            <ul>
+              <li>Agregué <code>/health</code> y <code>/api/health</code> para integración y monitoreo.</li>
+              <li>Habilité CORS para frontend/backend separados.</li>
+              <li>Completé endpoints de lectura: <code>/product</code>, <code>/category</code>, <code>/user</code>, <code>/role</code>.</li>
+              <li>Completé lifecycle con <code>/product/:id/deactivate</code>.</li>
+              <li>Definí rol único efectivo para usuarios no-admin con <code>/role/change</code>.</li>
+            </ul>
+          </article>
+
+          <article class="card">
+            <h2>Event-Driven implementado</h2>
+            <ul>
+              <li>Eventos: <code>product.created</code>, <code>product.activated</code>, <code>product.deactivated</code>.</li>
+              <li>Listener 1: registra <code>PRODUCT_CREATED/ACTIVATED/DEACTIVATED</code> en <code>product_event</code>.</li>
+              <li>Listener 2: al activar, setea <code>activatedAt</code> en producto.</li>
+              <li>Proyección con índices por <code>productId</code>, <code>type</code> y <code>occurredAt</code>.</li>
+            </ul>
+            <div class="flow">create -> emit event -> listener -> product_event -> timeline UI
+activate/deactivate -> emit event -> listener -> timeline UI</div>
+          </article>
+
+          <article class="card">
+            <h2>Flujo demo (6 pasos)</h2>
+            <ol>
+              <li>Admin inicia sesión y cambia un usuario a Merchant.</li>
+              <li>Merchant crea producto con datos completos.</li>
+              <li>Merchant edita detalles del producto.</li>
+              <li>Merchant activa producto.</li>
+              <li>Merchant desactiva producto.</li>
+              <li>Se valida timeline con 3 eventos de dominio.</li>
+            </ol>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="card">
+            <h2>Permisos por rol</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Acción</th>
+                  <th>Admin</th>
+                  <th>Merchant</th>
+                  <th>Customer</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td>Crear producto</td><td>SI</td><td>SI</td><td>NO</td></tr>
+                <tr><td>Editar producto</td><td>Todos</td><td>Solo propios</td><td>NO</td></tr>
+                <tr><td>Activar/Desactivar</td><td>Todos</td><td>Solo propios</td><td>NO</td></tr>
+                <tr><td>Cambiar roles</td><td>SI</td><td>NO</td><td>NO</td></tr>
+                <tr><td>Ver catálogo</td><td>SI</td><td>SI</td><td>SI</td></tr>
+              </tbody>
+            </table>
+          </article>
+
+          <article class="card">
+            <h2>Endpoints clave</h2>
+            <ul>
+              <li><b>Auth:</b> <code>/auth/register</code>, <code>/auth/login</code></li>
+              <li><b>Roles:</b> <code>/role</code>, <code>/role/change</code> <span class="muted">(<code>/role/assign</code> deshabilitado)</span></li>
+              <li><b>Usuarios:</b> <code>/user/profile</code>, <code>/user</code></li>
+              <li><b>Categorías:</b> <code>/category</code></li>
+              <li><b>Productos:</b> <code>/product</code>, <code>/product/:id</code>, <code>/product/:id/events</code></li>
+              <li><b>Lifecycle:</b> <code>/create</code>, <code>/details</code>, <code>/activate</code>, <code>/deactivate</code></li>
+            </ul>
+          </article>
+
+          <article class="card">
+            <h2>Deploy</h2>
+            <ul>
+              <li>Vercel proyecto API (root del repo).</li>
+              <li>Vercel proyecto Web (<code>apps/web</code>).</li>
+              <li>Neon Postgres por <code>DATABASE_URL</code>.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div><b>Backend:</b> &lt;URL_BACKEND&gt;</div>
+        <div><b>Frontend:</b> &lt;URL_FRONTEND&gt;</div>
+      </footer>
+    </main>
+  </body>
+</html>

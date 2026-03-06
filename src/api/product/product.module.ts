@@ -6,10 +6,20 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from '../user/user.module';
 import { User } from '../../database/entities/user.entity';
 import { Product } from 'src/database/entities/product.entity';
+import { ProductEvent } from 'src/database/entities/productEvent.entity';
+import { ProductEventLogListener } from './listeners/product-event-log.listener';
+import { ProductActivationMetadataListener } from './listeners/product-activation-metadata.listener';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Product, Category]), UserModule],
+  imports: [
+    TypeOrmModule.forFeature([User, Product, Category, ProductEvent]),
+    UserModule,
+  ],
   controllers: [ProductController],
-  providers: [ProductService],
+  providers: [
+    ProductService,
+    ProductEventLogListener,
+    ProductActivationMetadataListener,
+  ],
 })
 export class ProductModule {}

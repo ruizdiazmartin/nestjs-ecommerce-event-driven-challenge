@@ -1,0 +1,314 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entrega Challenge</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.45;color:#12263a;margin:0;background:#f5f7fb}
+.page{max-width:900px;margin:20px auto;padding:34px 40px;background:white;border:1px solid #d9e3ef;border-radius:12px}
+h1{font-size:30px;margin:0 0 14px;color:#0f2942}
+h2{font-size:22px;margin:28px 0 10px;color:#0f2942}
+h3{font-size:18px;margin:20px 0 8px;color:#173a5c}
+p{margin:8px 0}
+ul,ol{margin:8px 0 8px 24px;padding:0}
+li{margin:4px 0}
+code{background:#eef3fa;border:1px solid #d6e0ec;border-radius:6px;padding:1px 6px;font-size:90%}
+pre{background:#f6f8fc;border:1px solid #d6e0ec;border-radius:8px;padding:12px;overflow:auto}
+hr{border:none;border-top:1px solid #dde5ef;margin:22px 0}
+@media print{body{background:#fff}.page{margin:0;max-width:none;border:none;border-radius:0;padding:12mm 10mm}}
+</style>
+</head><body><main class="page">
+<h1>Entrega Challenge Sr Fullstack (Microservicios)</h1>
+<h2>0) Resumen ejecutivo</h2>
+<p>
+El objetivo fue evolucionar el backend inicial (NestJS + PostgreSQL) a un modelo event-driven, resolver los principales problemas para hacerlo ejecutable y mostrar el flujo completo con un frontend React. 
+</p>
+<p>
+Resultado: 
+</p>
+<ol>
+<li>Backend funcionando con endpoints de auth, roles, categorías, productos y salud.</li>
+<li>Eventos de dominio implementados y consumidos de forma desacoplada.</li>
+<li>Evidencia de asincronía visible en UI mediante timeline por producto.</li>
+<li>Web React funcional y role-aware (Admin, Merchant, Customer).</li>
+<li>Base preparada para deploy separado (API + Web) en Vercel, con Neon Postgres.</li>
+</ol>
+<hr>
+<h2>1) Objetivo del challenge</h2>
+<p>
+Evolucionar el sistema de catálogo e inventario hacia un enfoque event-driven, con cambios mínimos pero justificados, y demostrar el flujo de punta a punta desde una web simple. 
+</p>
+<hr>
+<h2>2) Problemas detectados (Antes) y correcciones (Después)</h2>
+<ol>
+<li>Antes: no había endpoint de health estándar para integración y monitoreo.</li>
+</ol>
+<p>
+Después: se agregó <code>GET /health</code> y alias <code>GET /api/health</code>. 
+</p>
+<ol>
+<li>Antes: faltaba CORS para frontend y backend en dominios separados.</li>
+</ol>
+<p>
+Después: se habilitó CORS básico en <code>main.ts</code> para entorno demo. 
+</p>
+<ol>
+<li>Antes: faltaban endpoints de lectura para UX real.</li>
+</ol>
+<p>
+Después: se agregaron <code>GET /product</code> (con filtros), <code>GET /category</code>, <code>GET /user</code> (admin), <code>GET /role</code> (admin). 
+</p>
+<ol>
+<li>Antes: el lifecycle de producto no tenía desactivación explícita.</li>
+</ol>
+<p>
+Después: se agregó <code>POST /product/:id/deactivate</code>. 
+</p>
+<ol>
+<li>Antes: gestión de roles podía generar ambigüedad.</li>
+</ol>
+<p>
+Después: se definió rol único efectivo para no-admin con <code>POST /role/change</code> y se deshabilitó <code>POST /role/assign</code>. 
+</p>
+<hr>
+<h2>3) Diseño Event-Driven implementado</h2>
+<p>
+Eventos de dominio: 
+</p>
+<ol>
+<li>`product.created`</li>
+<li>`product.activated`</li>
+<li>`product.deactivated`</li>
+</ol>
+<p>
+Puntos de emisión: 
+</p>
+<ol>
+<li>creación de producto,</li>
+<li>activación de producto,</li>
+<li>desactivación de producto.</li>
+</ol>
+<p>
+Consumidores desacoplados: 
+</p>
+<ol>
+<li>`ProductEventLogListener`: persiste eventos en `product_event`.</li>
+<li>`ProductActivationMetadataListener`: actualiza `activatedAt` al activar.</li>
+</ol>
+<p>
+Proyección de eventos: 
+</p>
+<ol>
+<li>tabla `product_event`,</li>
+<li>índices por `productId`, `type`, `occurredAt`,</li>
+<li>FK a producto con `ON DELETE CASCADE`.</li>
+</ol>
+<hr>
+<h2>4) Flujo asincrónico (event-driven) mostrado en UI</h2>
+<pre><code>
+POST /product/create
+  -&gt; emite product.created
+    -&gt; listener guarda PRODUCT_CREATED en product_event
+      -&gt; frontend consulta GET /product/:id/events
+
+POST /product/:id/activate
+  -&gt; emite product.activated
+    -&gt; listener guarda PRODUCT_ACTIVATED
+    -&gt; listener actualiza activatedAt
+      -&gt; frontend refresca timeline
+
+POST /product/:id/deactivate
+  -&gt; emite product.deactivated
+    -&gt; listener guarda PRODUCT_DEACTIVATED
+      -&gt; frontend refresca timeline
+</code></pre>
+<hr>
+<h2>5) Endpoints principales (estado final)</h2>
+<p>
+Auth: 
+</p>
+<ol>
+<li>`POST /auth/register`</li>
+<li>`POST /auth/login`</li>
+</ol>
+<p>
+User / Role: 
+</p>
+<ol>
+<li>`GET /user/profile`</li>
+<li>`GET /user` (admin)</li>
+<li>`GET /role` (admin)</li>
+<li>`POST /role/change` (admin, rol único para no-admin)</li>
+<li>`POST /role/assign` (admin, deshabilitado intencionalmente)</li>
+</ol>
+<p>
+Product / Category: 
+</p>
+<ol>
+<li>`GET /category`</li>
+<li>`GET /product`</li>
+<li>`GET /product/:id`</li>
+<li>`GET /product/:id/events`</li>
+<li>`POST /product/create` (admin/merchant)</li>
+<li>`POST /product/:id/details` (admin/merchant)</li>
+<li>`POST /product/:id/activate` (admin/merchant)</li>
+<li>`POST /product/:id/deactivate` (admin/merchant)</li>
+<li>`DELETE /product/:id` (admin/merchant)</li>
+</ol>
+<p>
+Health: 
+</p>
+<ol>
+<li>`GET /health`</li>
+<li>`GET /api/health`</li>
+</ol>
+<hr>
+<h2>6) Frontend React (`apps/web`)</h2>
+<p>
+Se construyó una consola en React + Vite + TypeScript con: 
+</p>
+<ol>
+<li>registro/login,</li>
+<li>sesión JWT,</li>
+<li>navegación por rol,</li>
+<li>listado y filtros de productos,</li>
+<li>creación de producto,</li>
+<li>detalle de producto con lectura clara para todos,</li>
+<li>acciones de lifecycle según permisos,</li>
+<li>timeline de eventos por producto,</li>
+<li>gestión de roles para admin.</li>
+</ol>
+<hr>
+<h2>7) Matriz de permisos final</h2>
+<ol>
+<li>Admin:</li>
+</ol>
+<ul>
+<li>crear productos,</li>
+<li>editar cualquier producto,</li>
+<li>activar/desactivar cualquier producto,</li>
+<li>ver usuarios,</li>
+<li>cambiar roles,</li>
+<li>ver catálogo.</li>
+</ul>
+<ol>
+<li>Merchant:</li>
+</ol>
+<ul>
+<li>crear productos,</li>
+<li>editar solo productos propios,</li>
+<li>activar/desactivar solo productos propios,</li>
+<li>ver catálogo.</li>
+</ul>
+<ol>
+<li>Customer:</li>
+</ol>
+<ul>
+<li>ver catálogo y detalle/timeline en modo lectura.</li>
+</ul>
+<hr>
+<h2>8) Flujo de demo recomendado</h2>
+<ol>
+<li>Registrar usuario y login.</li>
+<li>Login como admin.</li>
+<li>Cambiar el usuario a rol Merchant.</li>
+<li>Login como Merchant.</li>
+<li>Crear producto.</li>
+<li>Completar/editar datos.</li>
+<li>Activar producto.</li>
+<li>Ver timeline (`PRODUCT_CREATED`, `PRODUCT_ACTIVATED`).</li>
+<li>Desactivar producto.</li>
+</ol>
+<p>
+10. Ver <code>PRODUCT_DEACTIVATED</code>. 
+</p>
+<hr>
+<h2>9) Evidencia sugerida para anexar</h2>
+<ol>
+<li>Captura de login/registro.</li>
+<li>Captura de admin cambiando rol.</li>
+<li>Captura de creación de producto.</li>
+<li>Captura de activación/desactivación.</li>
+<li>Captura de timeline con eventos.</li>
+<li>Captura de deploy (frontend y backend públicos).</li>
+</ol>
+<hr>
+<h2>10) Cómo levantar local</h2>
+<p>
+Backend (raíz): 
+</p>
+<pre><code>
+npm install
+docker-compose up -d
+npm run migration:run
+npm run seed:run
+npm run start:dev
+</code></pre>
+<p>
+Frontend (<code>apps/web</code>): 
+</p>
+<pre><code>
+npm --prefix apps/web install
+npm --prefix apps/web run dev
+</code></pre>
+<p>
+Fullstack (desde raíz): 
+</p>
+<pre><code>
+npm run dev
+</code></pre>
+<hr>
+<h2>11) Deploy propuesto (Vercel + Neon)</h2>
+<ol>
+<li>Proyecto API en Vercel:</li>
+</ol>
+<ul>
+<li>Root Directory: raíz del repo.</li>
+<li>Variables: `DATABASE_URL`, `JWT_SECRET`, etc.</li>
+</ul>
+<ol>
+<li>Proyecto Web en Vercel:</li>
+</ol>
+<ul>
+<li>Root Directory: `apps/web`.</li>
+<li>Variable: `VITE_API_BASE_URL=https://&lt;tu-api&gt;.vercel.app`.</li>
+</ul>
+<ol>
+<li>Base de datos:</li>
+</ol>
+<ul>
+<li>Neon Postgres.</li>
+<li>Solo backend accede a DB.</li>
+</ul>
+<hr>
+<h2>12) URLs públicas</h2>
+<ol>
+<li>Backend: `&lt;URL_BACKEND&gt;`</li>
+<li>Frontend: `&lt;URL_FRONTEND&gt;`</li>
+</ol>
+<hr>
+<h2>13) Decisiones técnicas clave</h2>
+<ol>
+<li>Cambios mínimos pero suficientes para demostrar criterio técnico.</li>
+<li>Event-driven in-process para simplicidad del challenge.</li>
+<li>Proyección de eventos para hacer visible la asincronía en frontend.</li>
+<li>Rol único efectivo para no-admin y evitar conflictos de permisos.</li>
+<li>Frontend desacoplado de DB; integración exclusivamente por API.</li>
+</ol>
+<hr>
+<h2>14) Limitaciones actuales y próximos pasos</h2>
+<p>
+Limitaciones: 
+</p>
+<ol>
+<li>Event bus in-process (sin broker externo).</li>
+<li>No se implementó full CRUD de inventory/variations/prices para esta fase.</li>
+<li>CI/CD completo queda como fase siguiente.</li>
+</ol>
+<p>
+Próximos pasos: 
+</p>
+<ol>
+<li>Pipeline GitHub Actions (lint/test/build/deploy por entorno).</li>
+<li>Hardening de CORS y políticas de seguridad para producción.</li>
+<li>Evolución a broker (ej: RabbitMQ/Kafka) si se requiere escalabilidad asíncrona.</li>
+</ol>
+</main></body></html>

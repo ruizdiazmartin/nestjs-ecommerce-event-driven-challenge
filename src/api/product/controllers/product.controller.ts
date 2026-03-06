@@ -1,9 +1,21 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { RoleIds } from '../../role/enum/role.enum';
-import { CreateProductDto, ProductDetailsDto } from '../dto/product.dto';
+import {
+  CreateProductDto,
+  FindProductsQueryDto,
+  ProductDetailsDto,
+} from '../dto/product.dto';
 import { ProductService } from '../services/product.service';
 import { Auth } from 'src/api/auth/guards/auth.decorator';
-import { FindOneParams } from 'src/common/helper/findOneParams.dto';
 import { CurrentUser } from 'src/api/auth/guards/user.decorator';
 import { User } from 'src/database/entities/user.entity';
 
@@ -11,9 +23,19 @@ import { User } from 'src/database/entities/user.entity';
 export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
+  @Get()
+  async getProducts(@Query() query: FindProductsQueryDto) {
+    return this.productService.getProducts(query);
+  }
+
   @Get(':id')
-  async getProduct(@Param() product: FindOneParams) {
-    return this.productService.getProduct(product.id);
+  async getProduct(@Param('id', ParseIntPipe) productId: number) {
+    return this.productService.getProduct(productId);
+  }
+
+  @Get(':id/events')
+  async getProductEvents(@Param('id', ParseIntPipe) productId: number) {
+    return this.productService.getProductEvents(productId);
   }
 
   @Auth(RoleIds.Admin, RoleIds.Merchant)
@@ -28,28 +50,45 @@ export class ProductController {
   @Auth(RoleIds.Admin, RoleIds.Merchant)
   @Post(':id/details')
   async addProductDetails(
-    @Param() product: FindOneParams,
+    @Param('id', ParseIntPipe) productId: number,
     @Body() body: ProductDetailsDto,
     @CurrentUser() user: User,
   ) {
-    return this.productService.addProductDetails(product.id, body, user.id);
+    const isAdmin = user.roles?.some((role) => role.id === RoleIds.Admin);
+    return this.productService.addProductDetails(
+      productId,
+      body,
+      user.id,
+      isAdmin,
+    );
   }
 
   @Auth(RoleIds.Admin, RoleIds.Merchant)
   @Post(':id/activate')
   async activateProduct(
-    @Param() product: FindOneParams,
+    @Param('id', ParseIntPipe) productId: number,
     @CurrentUser() user: User,
   ) {
-    return this.productService.activateProduct(product.id, user.id);
+    const isAdmin = user.roles?.some((role) => role.id === RoleIds.Admin);
+    return this.productService.activateProduct(productId, user.id, isAdmin);
+  }
+
+  @Auth(RoleIds.Admin, RoleIds.Merchant)
+  @Post(':id/deactivate')
+  async deactivateProduct(
+    @Param('id', ParseIntPipe) productId: number,
+    @CurrentUser() user: User,
+  ) {
+    const isAdmin = user.roles?.some((role) => role.id === RoleIds.Admin);
+    return this.productService.deactivateProduct(productId, user.id, isAdmin);
   }
 
   @Auth(RoleIds.Admin, RoleIds.Merchant)
   @Delete(':id')
   async deleteProduct(
-    @Param() product: FindOneParams,
+    @Param('id', ParseIntPipe) productId: number,
     @CurrentUser() user: User,
   ) {
-    return this.productService.deleteProduct(product.id, user.id);
+    return this.productService.deleteProduct(productId, user.id);
   }
 }

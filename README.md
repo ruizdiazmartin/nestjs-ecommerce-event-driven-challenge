@@ -65,3 +65,80 @@ If you're interested in contributing to this project, please follow these guidel
 1. Fork the repository
 2. Make your changes
 3. Submit a pull request
+
+## Monorepo Layout (API + Web)
+
+- Backend NestJS: repository root (`src/`, `test/`, etc.)
+- Frontend React (Vite): `apps/web`
+
+## Local Run (Fullstack)
+
+1. Install backend dependencies (root):
+
+```bash
+npm install
+```
+
+2. Install frontend dependencies:
+
+```bash
+npm --prefix apps/web install
+```
+
+3. Run both services:
+
+```bash
+npm run dev
+```
+
+This starts:
+- API: `http://localhost:3000`
+- Web: `http://localhost:5173`
+
+## Environment Variables
+
+Root (`.env`):
+- `DATABASE_URL`
+- `PORT`
+- `NODE_ENV`
+
+Frontend (`apps/web/.env`):
+- `VITE_API_BASE_URL` (example: `http://localhost:3000`)
+
+If `VITE_API_BASE_URL` is empty, the web app uses `"/api/health"` with Vite local proxy.
+
+## Vercel Deploy (2 Projects)
+
+1. Create project **api** (backend):
+- Root Directory: repository root
+- Framework: Other
+- Set backend env vars (`DATABASE_URL`, etc.)
+
+2. Create project **web** (frontend):
+- Root Directory: `apps/web`
+- Framework: Vite
+- Set `VITE_API_BASE_URL` to deployed API URL
+
+3. Neon Postgres:
+- Provision Neon database (Vercel Marketplace or manually)
+- Copy `DATABASE_URL` into backend project env vars
+
+## Future Infra Plan (placeholder)
+
+- Add GitHub Actions for:
+  - backend lint/test/build
+  - web lint/typecheck/test/build
+- Add environment-aware deploy workflows (`preview` and `production`)
+- Keep `apps/web` and backend pipelines independently deployable
+
+## E-commerce Demo Scope (v1)
+
+- Auth: register/login + JWT session in frontend
+- Roles: profile + admin role assignment UI
+- Product lifecycle:
+  - list products
+  - create product
+  - complete details
+  - activate/deactivate
+  - event timeline by product
+- Event-driven evidence in UI: timeline renders `PRODUCT_CREATED`, `PRODUCT_ACTIVATED`, `PRODUCT_DEACTIVATED`

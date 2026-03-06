@@ -40,6 +40,15 @@ export class UserService {
     return user;
   }
 
+  public async findAll(relations?: UserRelation): Promise<User[]> {
+    return this.repository.find({
+      relations,
+      order: {
+        id: 'ASC',
+      },
+    });
+  }
+
   public async comparePassword(password, userPassword): Promise<boolean> {
     return compare(password, userPassword);
   }
@@ -59,5 +68,22 @@ export class UserService {
 
   public async save(user: User) {
     return this.repository.save(user);
+  }
+
+  public async replaceRoles(userId: number, roleIds: number[]) {
+    await this.repository.query(
+      'DELETE FROM "user_roles" WHERE "userId" = $1',
+      [userId],
+    );
+
+    if (roleIds.length === 0) {
+      return;
+    }
+
+    await this.repository
+      .createQueryBuilder()
+      .relation(User, 'roles')
+      .of(userId)
+      .add(roleIds);
   }
 }

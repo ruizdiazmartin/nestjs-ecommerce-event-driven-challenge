@@ -65,6 +65,9 @@ export class Product {
   @Column({ default: false })
   public isActive: boolean;
 
+  @Column({ type: 'timestamp', nullable: true })
+  public activatedAt?: Date | null;
+
   @Column({ type: 'int', nullable: true })
   @IsDefined()
   @IsNumber()

@@ -40,6 +40,7 @@ describe('RoleService', () => {
     fakeUserService = {
       findById: jest.fn().mockImplementation(() => Promise.resolve(user)),
       save: jest.fn().mockImplementation((user) => Promise.resolve(user)),
+      replaceRoles: jest.fn().mockResolvedValue(undefined),
     };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,29 +82,18 @@ describe('RoleService', () => {
     });
   });
 
-  describe('assignRoleToUser: assing role to user', () => {
-    it('should assign', async () => {
-      const result = await service.assignRoleToUser({
+  describe('assignRoleToUser: endpoint disabled', () => {
+    it('should throw with guidance message', async () => {
+      const result = service.assignRoleToUser({
         roleId: RoleIds.Merchant,
         userId: user.id,
       });
 
-      expect(fakeRoleRepo.findOne).toBeCalled();
-      expect(fakeUserService.findById).toBeCalled();
-
-      expect(result.roles.length).toBe(2);
-    });
-
-    it('should not assign', async () => {
-      const result = await service.assignRoleToUser({
-        roleId: RoleIds.Customer,
-        userId: user.id,
-      });
-
-      expect(fakeRoleRepo.findOne).toBeCalled();
-      expect(fakeUserService.findById).toBeCalled();
-
-      expect(result.roles.length).toBe(1);
+      await expect(result).rejects.toThrow(
+        'role.assign is disabled. Use /role/change to set a single role per non-admin user.',
+      );
+      expect(fakeRoleRepo.findOne).not.toBeCalled();
+      expect(fakeUserService.findById).not.toBeCalled();
     });
   });
 });
