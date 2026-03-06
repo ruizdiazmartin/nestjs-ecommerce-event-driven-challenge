@@ -87,7 +87,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
           PREVIEW_DATABASE_URL: ${{ steps.preview_db_url.outputs.database_url }}
         run: |
-          DEPLOY_OUTPUT=$(vercel deploy --yes --public --token "$VERCEL_TOKEN" \
+          DEPLOY_OUTPUT=$(vercel deploy --yes --token "$VERCEL_TOKEN" \
             --env DATABASE_URL="$PREVIEW_DATABASE_URL" \
             --env DATABASE_SSL=require)
           API_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
@@ -98,6 +98,21 @@ jobs:
           fi
           echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
 
+      - name: Validate API preview is publicly reachable
+        env:
+          API_PREVIEW_URL: ${{ steps.deploy_api.outputs.api_url }}
+        run: |
+          STATUS_CODE=$(curl -sS -o /tmp/api-preview-health.txt -w "%{http_code}" "$API_PREVIEW_URL/health")
+          if [ "$STATUS_CODE" = "401" ] && grep -qiE "Authentication Required|Vercel Authentication" /tmp/api-preview-health.txt; then
+            echo "::error::API preview is blocked by Vercel Deployment Protection. Disable protection for Preview in the API project (Settings -> Deployment Protection -> Preview) and rerun this workflow."
+            exit 1
+          fi
+          if [ "$STATUS_CODE" -ge 400 ]; then
+            echo "::error::API preview /health returned HTTP $STATUS_CODE"
+            cat /tmp/api-preview-health.txt
+            exit 1
+          fi
+
       - name: Deploy Web preview
         id: deploy_web
         working-directory: apps/web
@@ -107,7 +122,7 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
           API_PREVIEW_URL: ${{ steps.deploy_api.outputs.api_url }}
         run: |
-          DEPLOY_OUTPUT=$(vercel deploy --yes --public --token "$VERCEL_TOKEN" --build-env VITE_API_BASE_URL="$API_PREVIEW_URL")
+          DEPLOY_OUTPUT=$(vercel deploy --yes --token "$VERCEL_TOKEN" --build-env VITE_API_BASE_URL="$API_PREVIEW_URL")
           WEB_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
           if [ -z "$WEB_URL" ]; then
             echo "Failed to parse Web preview URL"
