@@ -19,7 +19,8 @@ export class RoleService {
     private readonly userService: UserService,
   ) {}
 
-  async assignRoleToUser(_data: AssignRoleDto) {
+  async assignRoleToUser(data: AssignRoleDto) {
+    void data;
     throw new BadRequestException(
       'role.assign is disabled. Use /role/change to set a single role per non-admin user.',
     );
@@ -27,13 +28,17 @@ export class RoleService {
 
   async changeRoleForUser(data: ChangeRoleDto) {
     if (data.roleId === RoleIds.Admin) {
-      throw new BadRequestException('cannot assign Admin role with this action');
+      throw new BadRequestException(
+        'cannot assign Admin role with this action',
+      );
     }
 
     const role = await this.findById(data.roleId);
     const user = await this.userService.findById(data.userId, { roles: true });
 
-    const userIsAdmin = user.roles.some((userRole) => userRole.id === RoleIds.Admin);
+    const userIsAdmin = user.roles.some(
+      (userRole) => userRole.id === RoleIds.Admin,
+    );
     if (userIsAdmin) {
       throw new ForbiddenException(errorMessages.auth.notAllowed);
     }

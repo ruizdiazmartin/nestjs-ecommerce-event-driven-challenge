@@ -1,0 +1,61 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+
+      - name: Install API dependencies
+        run: npm ci
+
+      - name: Install Web dependencies
+        run: npm --prefix apps/web ci
+
+      - name: Build API and Web
+        run: npm run build
+
+      - name: Run production migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_SSL: require
+        run: npm run migration:run
+
+      - name: Ensure Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy API to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+        run: vercel deploy --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Deploy Web to production
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          WEB_PROD_API_BASE_URL: ${{ secrets.WEB_PROD_API_BASE_URL }}
+        run: |
+          vercel deploy --prod --yes --token "$VERCEL_TOKEN" \
+            --build-env VITE_API_BASE_URL="$WEB_PROD_API_BASE_URL"
