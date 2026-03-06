@@ -113,13 +113,26 @@ jobs:
         env:
           API_PREVIEW_URL: ${{ steps.deploy_api.outputs.api_url }}
         run: |
-          STATUS_CODE=$(curl -sS -o /tmp/api-preview-health.txt -w "%{http_code}" "$API_PREVIEW_URL/health")
-          if [ "$STATUS_CODE" = "401" ] && grep -qiE "Authentication Required|Vercel Authentication" /tmp/api-preview-health.txt; then
-            echo "::error::API preview is blocked by Vercel Deployment Protection. Disable protection for Preview in the API project (Settings -> Deployment Protection -> Preview) and rerun this workflow."
-            exit 1
-          fi
+          ATTEMPTS=0
+          MAX_ATTEMPTS=6
+          STATUS_CODE=000
+          while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            STATUS_CODE=$(curl -sS -o /tmp/api-preview-health.txt -w "%{http_code}" "$API_PREVIEW_URL/health")
+            if [ "$STATUS_CODE" -lt 400 ]; then
+              echo "API preview health check passed on attempt $ATTEMPTS"
+              break
+            fi
+            if [ "$STATUS_CODE" = "401" ] && grep -qiE "Authentication Required|Vercel Authentication" /tmp/api-preview-health.txt; then
+              echo "::error::API preview is blocked by Vercel Deployment Protection. Disable protection for Preview in the API project (Settings -> Deployment Protection -> Preview) and rerun this workflow."
+              exit 1
+            fi
+            echo "Health attempt $ATTEMPTS/$MAX_ATTEMPTS returned HTTP $STATUS_CODE. Retrying..."
+            sleep 5
+          done
+
           if [ "$STATUS_CODE" -ge 400 ]; then
-            echo "::error::API preview /health returned HTTP $STATUS_CODE"
+            echo "::error::API preview /health returned HTTP $STATUS_CODE after $MAX_ATTEMPTS attempts"
             cat /tmp/api-preview-health.txt
             exit 1
           fi
