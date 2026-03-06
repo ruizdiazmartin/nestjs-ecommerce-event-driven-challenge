@@ -79,6 +79,17 @@ jobs:
           DATABASE_SSL: require
         run: npm run migration:run
 
+      - name: Seed preview data (admin + catalogs)
+        env:
+          DATABASE_URL: ${{ steps.preview_db_url.outputs.database_url }}
+          DATABASE_SSL: require
+          PREVIEW_ADMIN_EMAIL: ${{ secrets.PREVIEW_ADMIN_EMAIL }}
+          PREVIEW_ADMIN_PASSWORD: ${{ secrets.PREVIEW_ADMIN_PASSWORD }}
+        run: |
+          export ADMIN_EMAIL="${PREVIEW_ADMIN_EMAIL:-admin@admin.com}"
+          export ADMIN_PASSWORD="${PREVIEW_ADMIN_PASSWORD:-12345678}"
+          npm run seed:run:compiled
+
       - name: Deploy API preview
         id: deploy_api
         env:
@@ -147,7 +158,8 @@ jobs:
             - API Preview URL (temporal por PR): ${process.env.API_URL}
             - Web Preview URL (temporal por PR): ${process.env.WEB_URL}
             - API Produccion (estable): ${process.env.STABLE_API_URL || 'configurar secret WEB_PROD_API_BASE_URL'}
-            - Neon branch: \`${process.env.NEON_BRANCH_NAME}\``;
+            - Neon branch: \`${process.env.NEON_BRANCH_NAME}\`
+            - Admin Preview por defecto: \`admin@admin.com / 12345678\` (si no se overridea con secrets PREVIEW_ADMIN_*)`;
 
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
