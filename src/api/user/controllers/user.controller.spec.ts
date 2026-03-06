@@ -1,12 +1,11 @@
-import { ConfigModule } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { configuration } from 'src/config';
-import { TypeOrmConfigService } from 'src/database/typeorm/typeorm.service';
-import { AuthModule } from '../../auth/auth.module';
 import { UserController } from './user.controller';
 import { User } from '../../../database/entities/user.entity';
 import { UserService } from '../services/user.service';
+
+jest.mock('src/api/auth/guards/auth.decorator', () => ({
+  Auth: () => () => undefined,
+}));
 
 describe('UserController', () => {
   let controller: UserController;
@@ -29,11 +28,6 @@ describe('UserController', () => {
           provide: UserService,
           useValue: fakeUserService,
         },
-      ],
-      imports: [
-        AuthModule,
-        ConfigModule.forRoot({ load: [configuration], isGlobal: true }),
-        TypeOrmModule.forRootAsync({ useClass: TypeOrmConfigService }),
       ],
     }).compile();
 

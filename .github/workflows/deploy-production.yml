@@ -1,0 +1,91 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+
+      - name: Install API dependencies
+        run: npm ci
+
+      - name: Install Web dependencies
+        run: npm --prefix apps/web ci
+
+      - name: Build API and Web
+        run: npm run build
+
+      - name: Run production migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_SSL: require
+        run: npm run migration:run
+
+      - name: Ensure Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy API to production
+        id: deploy_api_prod
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+        run: |
+          DEPLOY_OUTPUT=$(vercel deploy --prod --yes --token "$VERCEL_TOKEN")
+          API_DEPLOYMENT_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
+          if [ -z "$API_DEPLOYMENT_URL" ]; then
+            echo "No se pudo parsear la URL del deployment de API"
+            echo "$DEPLOY_OUTPUT"
+            exit 1
+          fi
+          echo "deployment_url=$API_DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy Web to production
+        id: deploy_web_prod
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          WEB_PROD_API_BASE_URL: ${{ secrets.WEB_PROD_API_BASE_URL }}
+        run: |
+          DEPLOY_OUTPUT=$(vercel deploy --prod --yes --token "$VERCEL_TOKEN" \
+            --build-env VITE_API_BASE_URL="$WEB_PROD_API_BASE_URL")
+          WEB_DEPLOYMENT_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
+          if [ -z "$WEB_DEPLOYMENT_URL" ]; then
+            echo "No se pudo parsear la URL del deployment de Web"
+            echo "$DEPLOY_OUTPUT"
+            exit 1
+          fi
+          echo "deployment_url=$WEB_DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Production deploy summary
+        env:
+          STABLE_API_URL: ${{ secrets.WEB_PROD_API_BASE_URL }}
+          API_DEPLOYMENT_URL: ${{ steps.deploy_api_prod.outputs.deployment_url }}
+          WEB_DEPLOYMENT_URL: ${{ steps.deploy_web_prod.outputs.deployment_url }}
+        run: |
+          {
+            echo "## Production deploy"
+            echo "- API estable (usar esta): ${STABLE_API_URL}"
+            echo "- API deployment (unico por build): ${API_DEPLOYMENT_URL}"
+            echo "- Web deployment (unico por build): ${WEB_DEPLOYMENT_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"

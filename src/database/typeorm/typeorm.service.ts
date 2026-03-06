@@ -5,6 +5,9 @@ import { dataSourceOptions } from 'src/database/typeorm/typeOrm.config';
 @Injectable()
 export class TypeOrmConfigService implements TypeOrmOptionsFactory {
   public createTypeOrmOptions(): TypeOrmModuleOptions {
-    return dataSourceOptions;
+    return {
+      ...dataSourceOptions,
+      autoLoadEntities: true,
+    };
   }
 }

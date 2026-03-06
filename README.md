@@ -106,3 +106,19 @@ Frontend (`apps/web/.env`):
 - `VITE_API_BASE_URL` (example: `http://localhost:3000`)
 
 If `VITE_API_BASE_URL` is empty, the web app uses `"/api/health"` with Vite local proxy.
+
+## CI/CD Automation (GitHub Actions + Vercel + Neon)
+
+- Feature/PR and `main` are automated via workflows in `.github/workflows`.
+- Preview flow:
+  - Creates a Neon branch per PR
+  - Runs migrations on preview DB
+  - Deploys API + Web preview
+  - Publishes preview URLs in PR comments
+  - Deletes Neon branch when PR closes
+- Production flow:
+  - Runs migrations on prod DB before deploy
+  - Deploys API and Web to Vercel production
+
+Setup details and required secrets:
+- See `vercel.project.md`

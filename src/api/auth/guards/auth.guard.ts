@@ -4,25 +4,32 @@ import {
   ExecutionContext,
   UnauthorizedException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { TokenExpiredError } from 'jsonwebtoken';
+import { ConfigService } from '@nestjs/config';
+import { verify, TokenExpiredError, JwtPayload } from 'jsonwebtoken';
 import { UserService } from 'src/api/user/services/user.service';
 import { errorMessages } from 'src/errors/custom';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
     private readonly userService: UserService,
+    private readonly configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     try {
       const request = context.switchToHttp().getRequest();
-      const bearerToken = request.headers.authorization.split(' ')[1];
-      const payload = await this.jwtService.verifyAsync(bearerToken, {
-        secret: process.env.JWT_SECRET,
-      });
+      const authorizationHeader = request.headers.authorization;
+      const bearerToken = authorizationHeader?.startsWith('Bearer ')
+        ? authorizationHeader.split(' ')[1]
+        : null;
+      if (!bearerToken) {
+        throw new UnauthorizedException(errorMessages.auth.invlidToken);
+      }
+      const payload = verify(
+        bearerToken,
+        this.configService.get<string>('jwt.secret'),
+      ) as JwtPayload & { id: number };
       request.user = await this.userService.findById(payload.id, {
         roles: true,
       });

@@ -217,7 +217,9 @@ describe('ProductService', () => {
 
       const result = service.addProductDetails(1, productDetails, 1);
 
-      expect(result).rejects.toThrowError(errorMessages.auth.notAllowed.message);
+      expect(result).rejects.toThrowError(
+        errorMessages.auth.notAllowed.message,
+      );
     });
 
     it('should throw not found product', async () => {
@@ -269,7 +271,9 @@ describe('ProductService', () => {
     it('should throw error if product not fulfilled', async () => {
       const incompleteProduct = new Product();
       incompleteProduct.merchantId = 1;
-      fakeEntityManager.findOne = jest.fn().mockReturnValueOnce(incompleteProduct);
+      fakeEntityManager.findOne = jest
+        .fn()
+        .mockReturnValueOnce(incompleteProduct);
       const result = service.activateProduct(1, 1);
 
       expect(fakeEntityManager.findOne).toBeCalled();
@@ -347,7 +351,9 @@ describe('ProductService', () => {
 
       const result = service.deactivateProduct(1, 1);
 
-      expect(result).rejects.toThrowError(errorMessages.auth.notAllowed.message);
+      expect(result).rejects.toThrowError(
+        errorMessages.auth.notAllowed.message,
+      );
     });
 
     it('should throw not found product', async () => {

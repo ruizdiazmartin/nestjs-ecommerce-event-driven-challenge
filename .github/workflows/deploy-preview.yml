@@ -1,0 +1,238 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.deploy_api.outputs.api_url }}
+      web_url: ${{ steps.deploy_web.outputs.web_url }}
+      neon_branch_name: ${{ steps.neon.outputs.branch_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install API dependencies
+        run: npm ci
+
+      - name: Ensure Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Resolve preview DB strategy
+        id: preview_db
+        env:
+          DATABASE_URL_SECRET: ${{ secrets.DATABASE_URL }}
+          NEON_API_KEY_SECRET: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID_SECRET: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH_ID_SECRET: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+        run: |
+          if [ -n "$NEON_API_KEY_SECRET" ] && [ -n "$NEON_PROJECT_ID_SECRET" ] && [ -n "$NEON_PARENT_BRANCH_ID_SECRET" ]; then
+            echo "use_neon_branch=true" >> "$GITHUB_OUTPUT"
+            echo "branch_name=preview-pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            if [ -z "$DATABASE_URL_SECRET" ]; then
+              echo "DATABASE_URL secret is required when NEON_* branch secrets are not configured"
+              exit 1
+            fi
+            echo "use_neon_branch=false" >> "$GITHUB_OUTPUT"
+            echo "branch_name=shared-preview" >> "$GITHUB_OUTPUT"
+            echo "database_url=$DATABASE_URL_SECRET" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create/Re-use Neon branch for PR
+        id: neon
+        if: steps.preview_db.outputs.use_neon_branch == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH_ID: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+          NEON_DATABASE_NAME: ${{ secrets.NEON_DATABASE_NAME }}
+          NEON_ROLE_NAME: ${{ secrets.NEON_ROLE_NAME }}
+        run: node scripts/ci/neon-branch.mjs create ${{ steps.preview_db.outputs.branch_name }}
+
+      - name: Resolve preview DATABASE_URL
+        id: preview_db_url
+        run: |
+          if [ "${{ steps.preview_db.outputs.use_neon_branch }}" = "true" ]; then
+            echo "database_url=${{ steps.neon.outputs.database_url }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "database_url=${{ steps.preview_db.outputs.database_url }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run migrations on preview DB
+        env:
+          DATABASE_URL: ${{ steps.preview_db_url.outputs.database_url }}
+          DATABASE_SSL: require
+        run: npm run migration:run
+
+      - name: Seed preview data (admin + catalogs)
+        env:
+          DATABASE_URL: ${{ steps.preview_db_url.outputs.database_url }}
+          DATABASE_SSL: require
+          PREVIEW_ADMIN_EMAIL: ${{ secrets.PREVIEW_ADMIN_EMAIL }}
+          PREVIEW_ADMIN_PASSWORD: ${{ secrets.PREVIEW_ADMIN_PASSWORD }}
+        run: |
+          export ADMIN_EMAIL="${PREVIEW_ADMIN_EMAIL:-admin@admin.com}"
+          export ADMIN_PASSWORD="${PREVIEW_ADMIN_PASSWORD:-12345678}"
+          npm run seed:run:compiled
+
+      - name: Deploy API preview
+        id: deploy_api
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+          PREVIEW_DATABASE_URL: ${{ steps.preview_db_url.outputs.database_url }}
+        run: |
+          DEPLOY_OUTPUT=$(vercel deploy --yes --token "$VERCEL_TOKEN" \
+            --env DATABASE_URL="$PREVIEW_DATABASE_URL" \
+            --env DATABASE_SSL=require)
+          API_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
+          if [ -z "$API_URL" ]; then
+            echo "Failed to parse API preview URL"
+            echo "$DEPLOY_OUTPUT"
+            exit 1
+          fi
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate API preview is publicly reachable
+        env:
+          API_PREVIEW_URL: ${{ steps.deploy_api.outputs.api_url }}
+        run: |
+          ATTEMPTS=0
+          MAX_ATTEMPTS=6
+          STATUS_CODE=000
+          while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
+            ATTEMPTS=$((ATTEMPTS + 1))
+            STATUS_CODE=$(curl -sS -o /tmp/api-preview-health.txt -w "%{http_code}" "$API_PREVIEW_URL/health")
+            if [ "$STATUS_CODE" -lt 400 ]; then
+              echo "API preview health check passed on attempt $ATTEMPTS"
+              break
+            fi
+            if [ "$STATUS_CODE" = "401" ] && grep -qiE "Authentication Required|Vercel Authentication" /tmp/api-preview-health.txt; then
+              echo "::error::API preview is blocked by Vercel Deployment Protection. Disable protection for Preview in the API project (Settings -> Deployment Protection -> Preview) and rerun this workflow."
+              exit 1
+            fi
+            echo "Health attempt $ATTEMPTS/$MAX_ATTEMPTS returned HTTP $STATUS_CODE. Retrying..."
+            sleep 5
+          done
+
+          if [ "$STATUS_CODE" -ge 400 ]; then
+            echo "::error::API preview /health returned HTTP $STATUS_CODE after $MAX_ATTEMPTS attempts"
+            cat /tmp/api-preview-health.txt
+            exit 1
+          fi
+
+      - name: Deploy Web preview
+        id: deploy_web
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+          API_PREVIEW_URL: ${{ steps.deploy_api.outputs.api_url }}
+        run: |
+          DEPLOY_OUTPUT=$(vercel deploy --yes --token "$VERCEL_TOKEN" --build-env VITE_API_BASE_URL="$API_PREVIEW_URL")
+          WEB_URL=$(echo "$DEPLOY_OUTPUT" | grep -Eo 'https://[^[:space:]]+\.vercel\.app' | tail -n1)
+          if [ -z "$WEB_URL" ]; then
+            echo "Failed to parse Web preview URL"
+            echo "$DEPLOY_OUTPUT"
+            exit 1
+          fi
+          echo "web_url=$WEB_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish preview comment on PR
+        uses: actions/github-script@v7
+        env:
+          API_URL: ${{ steps.deploy_api.outputs.api_url }}
+          WEB_URL: ${{ steps.deploy_web.outputs.web_url }}
+          NEON_BRANCH_NAME: ${{ steps.preview_db.outputs.branch_name }}
+          STABLE_API_URL: ${{ secrets.WEB_PROD_API_BASE_URL }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const marker = '<!-- preview-deploy-comment -->';
+            const body = `${marker}
+            ## Preview Deploy Ready
+            - API Preview URL (temporal por PR): ${process.env.API_URL}
+            - Web Preview URL (temporal por PR): ${process.env.WEB_URL}
+            - API Produccion (estable): ${process.env.STABLE_API_URL || 'configurar secret WEB_PROD_API_BASE_URL'}
+            - Neon branch: \`${process.env.NEON_BRANCH_NAME}\`
+            - Admin Preview por defecto: \`admin@admin.com / 12345678\` (si no se overridea con secrets PREVIEW_ADMIN_*)`;
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number }
+            );
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+  cleanup-preview-db:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check Neon cleanup preconditions
+        id: cleanup_preconditions
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH_ID: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+        run: |
+          if [ -n "$NEON_API_KEY" ] && [ -n "$NEON_PROJECT_ID" ] && [ -n "$NEON_PARENT_BRANCH_ID" ]; then
+            echo "should_cleanup=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_cleanup=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Delete Neon branch for PR
+        if: steps.cleanup_preconditions.outputs.should_cleanup == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NEON_PARENT_BRANCH_ID: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+          NEON_DATABASE_NAME: ${{ secrets.NEON_DATABASE_NAME }}
+          NEON_ROLE_NAME: ${{ secrets.NEON_ROLE_NAME }}
+        run: node scripts/ci/neon-branch.mjs delete preview-pr-${{ github.event.pull_request.number }}
+
+      - name: Skip cleanup when Neon branch mode is not configured
+        if: steps.cleanup_preconditions.outputs.should_cleanup != 'true'
+        run: echo "Skipping Neon branch cleanup because NEON_API_KEY/NEON_PROJECT_ID/NEON_PARENT_BRANCH_ID are not configured."
