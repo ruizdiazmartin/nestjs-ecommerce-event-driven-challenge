@@ -5,15 +5,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { TokenExpiredError } from 'jsonwebtoken';
+import { verify, TokenExpiredError, JwtPayload } from 'jsonwebtoken';
 import { UserService } from 'src/api/user/services/user.service';
 import { errorMessages } from 'src/errors/custom';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(
-    private readonly jwtService: JwtService,
     private readonly userService: UserService,
     private readonly configService: ConfigService,
   ) {}
@@ -28,9 +26,10 @@ export class AuthGuard implements CanActivate {
       if (!bearerToken) {
         throw new UnauthorizedException(errorMessages.auth.invlidToken);
       }
-      const payload = await this.jwtService.verifyAsync(bearerToken, {
-        secret: this.configService.get<string>('jwt.secret'),
-      });
+      const payload = verify(
+        bearerToken,
+        this.configService.get<string>('jwt.secret'),
+      ) as JwtPayload & { id: number };
       request.user = await this.userService.findById(payload.id, {
         roles: true,
       });
