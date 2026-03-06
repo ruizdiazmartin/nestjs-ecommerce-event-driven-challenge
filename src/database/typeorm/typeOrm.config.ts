@@ -28,7 +28,6 @@ const fallbackEntities = [
   'dist/src/database/entities/*.entity.js',
   'dist/database/entities/*.entity.js',
   'src/database/entities/*.entity.js',
-  'src/database/entities/*.entity.ts',
 ];
 
 const fallbackMigrations = [
