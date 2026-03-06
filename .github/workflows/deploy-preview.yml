@@ -122,14 +122,16 @@ jobs:
           API_URL: ${{ steps.deploy_api.outputs.api_url }}
           WEB_URL: ${{ steps.deploy_web.outputs.web_url }}
           NEON_BRANCH_NAME: ${{ steps.preview_db.outputs.branch_name }}
+          STABLE_API_URL: ${{ secrets.WEB_PROD_API_BASE_URL }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const marker = '<!-- preview-deploy-comment -->';
             const body = `${marker}
             ## Preview Deploy Ready
-            - API: ${process.env.API_URL}
-            - Web: ${process.env.WEB_URL}
+            - API Preview URL (temporal por PR): ${process.env.API_URL}
+            - Web Preview URL (temporal por PR): ${process.env.WEB_URL}
+            - API Produccion (estable): ${process.env.STABLE_API_URL || 'configurar secret WEB_PROD_API_BASE_URL'}
             - Neon branch: \`${process.env.NEON_BRANCH_NAME}\``;
 
             const { owner, repo } = context.repo;
