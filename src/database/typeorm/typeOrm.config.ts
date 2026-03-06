@@ -15,6 +15,26 @@ const useDatabaseUrl = Boolean(
 const sslEnabled =
   process.env.DATABASE_SSL?.toLowerCase() === 'true' ||
   process.env.DATABASE_SSL?.toLowerCase() === 'require';
+const configuredEntities = (process.env.DATABASE_ENTITIES ?? '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+const configuredMigrations = (process.env.DATABASE_MIGRATIONS ?? '')
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+
+const fallbackEntities = [
+  'dist/src/database/entities/*.entity.js',
+  'dist/database/entities/*.entity.js',
+  'src/database/entities/*.entity.js',
+  'src/database/entities/*.entity.ts',
+];
+
+const fallbackMigrations = [
+  'dist/src/database/migration/history/*.js',
+  'dist/database/migration/history/*.js',
+];
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -30,8 +50,14 @@ export const dataSourceOptions: DataSourceOptions = {
         username: process.env.DATABASE_USER,
         password: process.env.DATABASE_PASSWORD,
       }),
-  entities: [process.env.DATABASE_ENTITIES],
-  migrations: ['dist/database/migration/history/*.js'],
+  entities:
+    configuredEntities.length > 0
+      ? [...configuredEntities, ...fallbackEntities]
+      : fallbackEntities,
+  migrations:
+    configuredMigrations.length > 0
+      ? [...configuredMigrations, ...fallbackMigrations]
+      : fallbackMigrations,
   logger: 'simple-console',
   synchronize: false, // never use TRUE in production!
   logging: true, // for debugging in dev Area only
