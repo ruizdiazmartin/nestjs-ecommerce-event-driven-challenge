@@ -62,7 +62,7 @@ To run the tests, follow these steps:
 
 ## Contributing
 If you're interested in contributing to this project, please follow these guidelines:
-1. Fork the repository
+1. Clone the repository
 2. Make your changes
 3. Submit a pull request
 
